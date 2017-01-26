@@ -126,9 +126,11 @@ Form.prototype.parse = function (req, cb) {
       var filesArray = files[name] || (files[name] = []);
       filesArray.push(file);
     });
+
+    self.fileBuffers=[];
     self.on('close', function () {
       end(function () {
-        cb(null, fields, files, self.buffer);
+        cb(null, fields, files, Buffer.concat(self.fileBuffers));
       });
     });
   }
@@ -468,7 +470,7 @@ Form.prototype.onParsePartData = function (b) {
   } else {
     this.backpressure = !this.destStream.write(b);
   }
-  this.buffer = b;
+  this.fileBuffers.push(b);
 }
 
 Form.prototype.onParsePartEnd = function () {
