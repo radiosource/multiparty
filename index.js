@@ -73,7 +73,7 @@ function Form(options) {
 
   self.emitQueue = [];
 
-  self.on('newListener', function(eventName) {
+  self.on('newListener', function (eventName) {
     if (eventName === 'file') {
       self.autoFiles = true;
     } else if (eventName === 'field') {
@@ -82,7 +82,7 @@ function Form(options) {
   });
 }
 
-Form.prototype.parse = function(req, cb) {
+Form.prototype.parse = function (req, cb) {
   var called = false;
   var self = this;
   var waitend = true;
@@ -99,7 +99,7 @@ Form.prototype.parse = function(req, cb) {
       called = true;
 
       // wait for req events to fire
-      process.nextTick(function() {
+      process.nextTick(function () {
         if (waitend && req.readable) {
           // dump rest of request
           req.resume();
@@ -113,22 +113,22 @@ Form.prototype.parse = function(req, cb) {
 
     var fields = {};
     var files = {};
-    self.on('error', function(err) {
-      end(function() {
+    self.on('error', function (err) {
+      end(function () {
         cb(err);
       });
     });
-    self.on('field', function(name, value) {
+    self.on('field', function (name, value) {
       var fieldsArray = fields[name] || (fields[name] = []);
       fieldsArray.push(value);
     });
-    self.on('file', function(name, file) {
+    self.on('file', function (name, file) {
       var filesArray = files[name] || (files[name] = []);
       filesArray.push(file);
     });
-    self.on('close', function() {
-      end(function() {
-        cb(null, fields, files);
+    self.on('close', function () {
+      end(function () {
+        cb(null, fields, files, self.buffer);
       });
     });
   }
@@ -137,7 +137,7 @@ Form.prototype.parse = function(req, cb) {
   self.bytesExpected = getBytesExpected(req.headers);
 
   req.on('end', onReqEnd);
-  req.on('error', function(err) {
+  req.on('error', function (err) {
     waitend = false;
     handleError(err);
   });
@@ -213,7 +213,7 @@ Form.prototype.parse = function(req, cb) {
   }
 };
 
-Form.prototype._write = function(buffer, encoding, cb) {
+Form.prototype._write = function (buffer, encoding, cb) {
   if (this.error) return;
 
   var self = this;
@@ -255,8 +255,8 @@ Form.prototype._write = function(buffer, encoding, cb) {
           break;
         }
 
-        if (c !== boundary[index+2]) index = -2;
-        if (c === boundary[index+2]) index++;
+        if (c !== boundary[index + 2]) index = -2;
+        if (c === boundary[index + 2]) index++;
         break;
       case HEADER_FIELD_START:
         state = HEADER_FIELD;
@@ -354,7 +354,7 @@ Form.prototype._write = function(buffer, encoding, cb) {
           } else {
             index = 0;
           }
-        } else if (index - 1 === boundaryLength)  {
+        } else if (index - 1 === boundaryLength) {
           if (self.partBoundaryFlag) {
             index = 0;
             if (c === LF) {
@@ -372,7 +372,7 @@ Form.prototype._write = function(buffer, encoding, cb) {
         if (index > 0) {
           // when matching a possible boundary, keep a lookbehind reference
           // in case it turns out to be a false lead
-          lookbehind[index-1] = c;
+          lookbehind[index - 1] = c;
         } else if (prevIndex > 0) {
           // if our boundary turned out to be rubbish, the captured lookbehind
           // belongs to partData
@@ -430,19 +430,19 @@ Form.prototype._write = function(buffer, encoding, cb) {
   }
 };
 
-Form.prototype.onParsePartBegin = function() {
+Form.prototype.onParsePartBegin = function () {
   clearPartVars(this);
 }
 
-Form.prototype.onParseHeaderField = function(b) {
+Form.prototype.onParseHeaderField = function (b) {
   this.headerField += this.headerFieldDecoder.write(b);
 }
 
-Form.prototype.onParseHeaderValue = function(b) {
+Form.prototype.onParseHeaderValue = function (b) {
   this.headerValue += this.headerValueDecoder.write(b);
 }
 
-Form.prototype.onParseHeaderEnd = function() {
+Form.prototype.onParseHeaderEnd = function () {
   this.headerField = this.headerField.toLowerCase();
   this.partHeaders[this.headerField] = this.headerValue;
 
@@ -462,37 +462,39 @@ Form.prototype.onParseHeaderEnd = function() {
   this.headerValue = '';
 }
 
-Form.prototype.onParsePartData = function(b) {
+Form.prototype.onParsePartData = function (b) {
   if (this.partTransferEncoding === 'base64') {
-    this.backpressure = ! this.destStream.write(b.toString('ascii'), 'base64');
+    this.backpressure = !this.destStream.write(b.toString('ascii'), 'base64');
   } else {
-    this.backpressure = ! this.destStream.write(b);
+    this.backpressure = !this.destStream.write(b);
   }
+  this.buffer = b;
 }
 
-Form.prototype.onParsePartEnd = function() {
+Form.prototype.onParsePartEnd = function () {
   if (this.destStream) {
     flushWriteCbs(this);
     var s = this.destStream;
-    process.nextTick(function() {
+    process.nextTick(function () {
       s.end();
     });
   }
   clearPartVars(this);
 }
 
-Form.prototype.onParseHeadersEnd = function(offset) {
+Form.prototype.onParseHeadersEnd = function (offset) {
   var self = this;
-  switch(self.partTransferEncoding){
+  switch (self.partTransferEncoding) {
     case 'binary':
     case '7bit':
     case '8bit':
-    self.partTransferEncoding = 'binary';
-    break;
+      self.partTransferEncoding = 'binary';
+      break;
 
-    case 'base64': break;
+    case 'base64':
+      break;
     default:
-    return createError(400, 'unknown transfer-encoding: ' + self.partTransferEncoding);
+      return createError(400, 'unknown transfer-encoding: ' + self.partTransferEncoding);
   }
 
   self.totalFieldCount += 1;
@@ -501,7 +503,7 @@ Form.prototype.onParseHeadersEnd = function(offset) {
   }
 
   self.destStream = new stream.PassThrough();
-  self.destStream.on('drain', function() {
+  self.destStream.on('drain', function () {
     flushWriteCbs(self);
   });
   self.destStream.headers = self.partHeaders;
@@ -510,9 +512,9 @@ Form.prototype.onParseHeadersEnd = function(offset) {
   self.destStream.byteOffset = self.bytesReceived + offset;
   var partContentLength = self.destStream.headers['content-length'];
   self.destStream.byteCount = partContentLength ? parseInt(partContentLength, 10) :
-    self.bytesExpected ? (self.bytesExpected - self.destStream.byteOffset -
-      self.boundary.length - LAST_BOUNDARY_SUFFIX_LEN) :
-    undefined;
+      self.bytesExpected ? (self.bytesExpected - self.destStream.byteOffset -
+          self.boundary.length - LAST_BOUNDARY_SUFFIX_LEN) :
+          undefined;
 
   if (self.destStream.filename == null && self.autoFields) {
     handleField(self, self.destStream);
@@ -524,7 +526,7 @@ Form.prototype.onParseHeadersEnd = function(offset) {
 }
 
 function flushWriteCbs(self) {
-  self.writeCbs.forEach(function(cb) {
+  self.writeCbs.forEach(function (cb) {
     process.nextTick(cb);
   });
   self.writeCbs = [];
@@ -564,25 +566,25 @@ function maybeClose(self) {
 
   // go through the emit queue in case any field, file, or part events are
   // waiting to be emitted
-  holdEmitQueue(self)(function() {
+  holdEmitQueue(self)(function () {
     // nextTick because the user is listening to part 'end' events and we are
     // using part 'end' events to decide when to emit 'close'. we add our 'end'
     // handler before the user gets a chance to add theirs. So we make sure
     // their 'end' event fires before we emit the 'close' event.
     // this is covered by test/standalone/test-issue-36
-    process.nextTick(function() {
+    process.nextTick(function () {
       self.emit('close');
     });
   });
 }
 
 function cleanupOpenFiles(self) {
-  self.openedFiles.forEach(function(internalFile) {
+  self.openedFiles.forEach(function (internalFile) {
     // since fd slicer autoClose is true, destroying the only write stream
     // is guaranteed by the API to close the fd
     internalFile.ws.destroy();
 
-    fs.unlink(internalFile.publicFile.path, function(err) {
+    fs.unlink(internalFile.publicFile.path, function (err) {
       if (err) self.handleError(err);
     });
   });
@@ -592,7 +594,7 @@ function cleanupOpenFiles(self) {
 function holdEmitQueue(self, eventEmitter) {
   var item = {cb: null, ee: eventEmitter, err: null};
   self.emitQueue.push(item);
-  return function(cb) {
+  return function (cb) {
     item.cb = cb;
     flushEmitQueue(self);
   };
@@ -630,10 +632,10 @@ function flushEmitQueue(self) {
 function handlePart(self, partStream) {
   beginFlush(self);
   var emitAndReleaseHold = holdEmitQueue(self, partStream);
-  partStream.on('end', function() {
+  partStream.on('end', function () {
     endFlush(self);
   });
-  emitAndReleaseHold(function() {
+  emitAndReleaseHold(function () {
     self.emit('part', partStream);
   });
 }
@@ -653,10 +655,10 @@ function handleFile(self, fileStream) {
   };
   beginFlush(self); // flush to write stream
   var emitAndReleaseHold = holdEmitQueue(self, fileStream);
-  fileStream.on('error', function(err) {
+  fileStream.on('error', function (err) {
     self.handleError(err);
   });
-  fs.open(publicFile.path, 'wx', function(err, fd) {
+  fs.open(publicFile.path, 'wx', function (err, fd) {
     if (err) return self.handleError(err);
     var slicer = fdSlicer.createFromFd(fd, {autoClose: true});
 
@@ -664,28 +666,29 @@ function handleFile(self, fileStream) {
     // or else an error will be emitted
     internalFile.ws = slicer.createWriteStream({end: self.maxFilesSize - self.totalFileSize});
 
+
     // if an error ocurred while we were waiting for fs.open we handle that
     // cleanup now
     self.openedFiles.push(internalFile);
     if (self.error) return cleanupOpenFiles(self);
 
     var prevByteCount = 0;
-    internalFile.ws.on('error', function(err) {
+    internalFile.ws.on('error', function (err) {
       if (err.code === 'ETOOBIG') {
         err = createError(413, err.message);
         err.code = 'ETOOBIG';
       }
       self.handleError(err);
     });
-    internalFile.ws.on('progress', function() {
+    internalFile.ws.on('progress', function () {
       publicFile.size = internalFile.ws.bytesWritten;
       var delta = publicFile.size - prevByteCount;
       self.totalFileSize += delta;
       prevByteCount = publicFile.size;
     });
-    slicer.on('close', function() {
+    slicer.on('close', function () {
       if (self.error) return;
-      emitAndReleaseHold(function() {
+      emitAndReleaseHold(function () {
         self.emit('file', fileStream.name, publicFile);
       });
       endFlush(self);
@@ -700,10 +703,10 @@ function handleField(self, fieldStream) {
 
   beginFlush(self);
   var emitAndReleaseHold = holdEmitQueue(self, fieldStream);
-  fieldStream.on('error', function(err) {
+  fieldStream.on('error', function (err) {
     self.handleError(err);
   });
-  fieldStream.on('readable', function() {
+  fieldStream.on('readable', function () {
     var buffer = fieldStream.read();
     if (!buffer) return;
 
@@ -715,8 +718,8 @@ function handleField(self, fieldStream) {
     value += decoder.write(buffer);
   });
 
-  fieldStream.on('end', function() {
-    emitAndReleaseHold(function() {
+  fieldStream.on('end', function () {
+    emitAndReleaseHold(function () {
       self.emit('field', fieldStream.name, value);
     });
     endFlush(self);
@@ -729,7 +732,6 @@ function clearPartVars(self) {
   self.partFilename = null;
   self.partTransferEncoding = 'binary';
   self.destStream = null;
-
   self.headerFieldDecoder = new StringDecoder(self.encoding);
   self.headerField = "";
   self.headerValueDecoder = new StringDecoder(self.encoding);
@@ -751,7 +753,7 @@ function setUpParser(self, boundary) {
   self.partBoundaryFlag = false;
 
   beginFlush(self);
-  self.on('finish', function() {
+  self.on('finish', function () {
     if (self.state !== END) {
       self.handleError(createError(400, 'stream ended unexpectedly'));
     }
@@ -766,7 +768,7 @@ function uploadPath(baseDir, filename, renameTo, ext) {
 }
 
 function randoString(size) {
-  return rando(size).toString('base64').replace(/[\/\+]/g, function(x) {
+  return rando(size).toString('base64').replace(/[\/\+]/g, function (x) {
     return b64Safe[x];
   });
 }
@@ -793,7 +795,7 @@ function parseFilename(headerValue) {
 
   var filename = m[1];
   filename = filename.replace(/%22|\\"/g, '"');
-  filename = filename.replace(/&#([\d]{4});/g, function(m, code) {
+  filename = filename.replace(/&#([\d]{4});/g, function (m, code) {
     return String.fromCharCode(code);
   });
   return filename.substr(filename.lastIndexOf('\\') + 1);
